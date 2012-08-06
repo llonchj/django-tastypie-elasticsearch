@@ -21,3 +21,4 @@ How to use?
 -----------
 
 * See documentation: http://django-tastypie-elasticsearch.readthedocs.org
+* Mailing list: https://groups.google.com/forum/?fromgroups#!forum/django-tastypie-elasticsearch
