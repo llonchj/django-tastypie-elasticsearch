@@ -1,30 +1,85 @@
 import re
 import sys
-import uuid
+#import uuid
 
 from django.conf import settings
+from django.conf.urls.defaults import url
 
 from tastypie.bundle import Bundle
-from tastypie.resources import Resource
+from tastypie.resources import Resource, DeclarativeMetaclass
 from tastypie.paginator import Paginator
 from tastypie.exceptions import NotFound, ImmediateHttpResponse
+from tastypie.utils import trailing_slash
 from tastypie import http
 
 import pyes
+
+class FixedPaginator(Paginator):
+    # WORKAROUND
+    # https://github.com/toastdriven/django-tastypie/issues/510
+    def _generate_uri(self, limit, offset):
+        if self.resource_uri is None:
+            return None
+
+        try:
+            # QueryDict has a urlencode method that can handle multiple values for the same key
+            request_params = self.request_data.copy()
+            if 'limit' in request_params:
+                del request_params['limit']
+            if 'offset' in request_params:
+                del request_params['offset']
+            request_params.update({'limit': limit, 'offset': offset})
+            encoded_params = request_params.urlencode()
+        except AttributeError:
+            request_params = {}
+
+            for k, v in self.request_data.items():
+                if isinstance(v, unicode):
+                    request_params[k] = v.encode('utf-8')
+                else:
+                    request_params[k] = v
+
+            request_params.update({'limit': limit, 'offset': offset})
+            encoded_params = urlencode(request_params)
+
+        return '%s?%s' % (
+            self.resource_uri,
+            encoded_params
+        )
+
+class ESDeclarativeMetaclass(DeclarativeMetaclass):
+    """
+    This class has the same functionality as its supper ``ModelDeclarativeMetaclass``.
+    Only thing it does differently is how it sets ``object_class`` and ``queryset`` attributes.
+
+    This is an internal class and is not used by the end user of tastypie_mongoengine.
+    """
+
+    def __new__(self, name, bases, attrs):
+        meta = attrs.get('Meta')
+
+        new_class = super(ESDeclarativeMetaclass, self).__new__(self, name, bases, attrs)
+        #include_fields = getattr(new_class._meta, 'fields', [])
+        #excludes = getattr(new_class._meta, 'excludes', [])
+        #field_names = new_class.base_fields.keys()
+        print new_class
+        
+        setattr(new_class._meta, "es_server", getattr(settings, 
+            "ES_INDEX_SERVER", "127.0.0.1:9500"))
+        setattr(new_class._meta, "es_timeout", getattr(settings, 
+            "ES_INDEX_SERVER_TIMEOUT", 30))
+        setattr(new_class._meta, "object_class", dict)
+        setattr(new_class._meta, "paginator_class", FixedPaginator)
+
+        return new_class
 
 class ESResource(Resource):
     """
     ElasticSearch Resource
     """
-    class Meta:
-        es_server = getattr(settings, 
-            "ES_INDEX_SERVER", "127.0.0.1:9500")
-        es_timeout = 20
-        
-        allowed_methods = ('get', 'post', 'delete')
-        
-        object_class = dict
     
+    __metaclass__ = ESDeclarativeMetaclass
+        
     _es = None
     def es__get(self):
         if self._es is None:
@@ -32,6 +87,18 @@ class ESResource(Resource):
                 timeout=self._meta.es_timeout)
         return self._es
     es = property(es__get)
+    
+    def prepend_urls(self):
+        """
+        ElasticSearch uses non w as ID
+        Provide a better dispatch_detail pattern.
+        """
+        return [
+            url(r"^(?P<resource_name>%s)/(?P<%s>.*?)%s$" % (
+                self._meta.resource_name, self._meta.detail_uri_name, 
+                trailing_slash()), self.wrap_view('dispatch_detail'), 
+                name="api_dispatch_detail"),
+        ]
     
     def build_schema(self):
         return self.es.get_mapping(
@@ -112,8 +179,8 @@ class ESResource(Resource):
     def obj_create(self, bundle, request=None, **kwargs):
         bundle.obj = dict(kwargs)
         bundle = self.full_hydrate(bundle)
-        pk = kwargs.get("pk", 
-            bundle.obj.get("_id", str(uuid.uuid1())) )
+        pk = kwargs.get("pk", bundle.obj.get("_id"))
+            #bundle.obj.get("_id", str(uuid.uuid1())) )
 
         result = self.es.index(bundle.obj, index=self._meta.indices[0],
             doc_type=self._meta.doc_type, id=pk)
