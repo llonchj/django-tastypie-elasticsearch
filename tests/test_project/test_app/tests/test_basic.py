@@ -74,24 +74,44 @@ class BasicTest(test_runner.ESTestCase):
         obj_uri = response.get("Location")
         self.assertEqual(response.status_code, 201)
 
+        # get the list
+        response = self.c.get(base_url)
+        self.assertEqual(response.status_code, 200)
+        response = json.loads(response.content)
+
         #get the object
         response = self.c.get(obj_uri)
         self.assertEqual(response.status_code, 200)
 
+        # update object
+        obj1 = json.loads(response.content)
+        obj1["name"] = "Person 1 UPDATED"
+        response = self.c.post(base_url, 
+            json.dumps(obj1),
+            content_type='application/json')
+        self.assertEqual(response.status_code, 201)
+
         #delete the object
         response = self.c.delete(obj_uri)
         self.assertEqual(response.status_code, 204)
-
+        
         #get the *already deleted* object, not found expected
         response = self.c.get(obj_uri)
         self.assertEqual(response.status_code, 404)
+        
 
+    def test_masscreation(self):
+        resource_name = 'test'
+        base_url = self.resourceListURI(resource_name)
 
-        response = self.c.get(base_url)
-        self.assertEqual(response.status_code, 200)
-        response = json.loads(response.content)
-        print response
-
+        for i in range(1, 1000):
+            #create an object
+            obj = dict(name="Person %d" % i)
+        
+            response = self.c.post(base_url, 
+                json.dumps(obj), 
+                content_type='application/json')
+            self.assertEqual(response.status_code, 201)
 
 
         

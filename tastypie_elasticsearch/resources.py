@@ -1,4 +1,6 @@
-import itertools, re, sys
+import re
+import sys
+import uuid
 
 from django.conf import settings
 
@@ -62,6 +64,7 @@ class ESResource(Resource):
         if self._meta.api_name is not None:
             kwargs['api_name'] = self._meta.api_name
 
+        #print "get_resource_uri", kwargs, obj
         return self._build_reverse_url("api_dispatch_detail", kwargs=kwargs)
 
     def get_object_list(self, request):
@@ -109,10 +112,12 @@ class ESResource(Resource):
     def obj_create(self, bundle, request=None, **kwargs):
         bundle.obj = dict(kwargs)
         bundle = self.full_hydrate(bundle)
-        pk = kwargs.get("pk", None)
+        pk = kwargs.get("pk", 
+            bundle.obj.get("_id", str(uuid.uuid1())) )
 
         result = self.es.index(bundle.obj, index=self._meta.indices[0],
             doc_type=self._meta.doc_type, id=pk)
+        result.update(bundle.obj)
         return result
     
     def obj_update(self, bundle, request=None, **kwargs):
