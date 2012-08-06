@@ -5,6 +5,8 @@ from django.conf import settings
 from tastypie.bundle import Bundle
 from tastypie.resources import Resource
 from tastypie.paginator import Paginator
+from tastypie.exceptions import NotFound, ImmediateHttpResponse
+from tastypie import http
 
 import pyes
 
@@ -18,6 +20,8 @@ class ESResource(Resource):
         es_timeout = 20
         
         allowed_methods = ('get', 'post', 'delete')
+        
+        object_class = dict
     
     _es = None
     def es__get(self):
@@ -26,6 +30,10 @@ class ESResource(Resource):
                 timeout=self._meta.es_timeout)
         return self._es
     es = property(es__get)
+    
+    def build_schema(self):
+        return self.es.get_mapping(
+            doc_type=self._meta.doc_type, indices=self._meta.indices)
     
     def full_dehydrate(self, bundle):
         bundle.data.update(bundle.obj)
@@ -45,10 +53,11 @@ class ESResource(Resource):
             'resource_name': self._meta.resource_name,
         }
 
-        if isinstance(bundle_or_obj, Bundle):
-            kwargs[self._meta.detail_uri_name] = bundle_or_obj.obj.get_id()
-        else:
-            kwargs[self._meta.detail_uri_name] = bundle_or_obj.get_id()
+        obj = (bundle_or_obj.obj if 
+            isinstance(bundle_or_obj, Bundle) else bundle_or_obj)
+        
+        kwargs[self._meta.detail_uri_name] = (obj["_id"] if 
+            isinstance(obj, dict) else obj.get_id())
 
         if self._meta.api_name is not None:
             kwargs['api_name'] = self._meta.api_name
@@ -58,13 +67,20 @@ class ESResource(Resource):
     def get_object_list(self, request):
         offset = int(request.GET.get("offset", 0))
         limit = int(request.GET.get("limit", self._meta.limit))
+        q = request.GET.get("q")
 
-        query = pyes.StringQuery(request.GET.get("q", "*"))
+        if q:
+            query = pyes.StringQuery(q)
+        else:
+            query = pyes.MatchAllQuery()
+
         search = pyes.query.Search(
             query=query, start=offset, size=limit)
 
+        # refresh the index before query
+        self.es.refresh(self._meta.indices[0])
+        
         results = self.es.search(search, indices=self._meta.indices)
-
         return results
             
     def obj_get_list(self, request=None, **kwargs):
@@ -75,9 +91,19 @@ class ESResource(Resource):
 
         offset = int(request.GET.get("offset", 20))
         limit = int(request.GET.get("limit", 20))
-        id = kwargs.get(self._meta.detail_uri_name)
-        search = pyes.query.IdsQuery(id)
+        pk = kwargs.get(self._meta.detail_uri_name)
+        
+        # refresh the index before query
+        self.es.refresh(self._meta.indices[0])
+
+        search = pyes.query.IdsQuery(pk)
         results = self.es.search(search, indices=self._meta.indices)
+        
+        if results.total == 0:
+            #raise http.HttpNotFound("Nothing found with id='%s'" % pk)
+            raise ImmediateHttpResponse(
+                response=http.HttpNotFound("Nothing found with id='%s'" % pk))
+
         return results[0]
 
     def obj_create(self, bundle, request=None, **kwargs):
@@ -85,8 +111,8 @@ class ESResource(Resource):
         bundle = self.full_hydrate(bundle)
         pk = kwargs.get("pk", None)
 
-        result = self.es.index(bundle.obj.to_dict(), id=pk)
-
+        result = self.es.index(bundle.obj, index=self._meta.indices[0],
+            doc_type=self._meta.doc_type, id=pk)
         return result
     
     def obj_update(self, bundle, request=None, **kwargs):
@@ -101,7 +127,9 @@ class ESResource(Resource):
     
     def obj_delete(self, request=None, **kwargs):
         pk = kwargs.get("pk")
-        return self.es.delete(id=pk)
+        result = self.es.delete(index=self._meta.indices[0],
+            doc_type=self._meta.doc_type, id=pk)
+        return result
     
     def rollback(self, bundles):
         pass
