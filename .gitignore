@@ -1,6 +1,11 @@
+*.tmproj
 *.log
 *.pot
 *.pyc
 local_settings.py
 build/**
 *.egg-info/**
+*.egg
+bin/**
+lib/**
+include/**
