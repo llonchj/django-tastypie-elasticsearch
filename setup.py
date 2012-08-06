@@ -11,7 +11,7 @@ if __name__ == '__main__':
         name = 'django-tastypie-elasticsearch',
         version = VERSION,
         description = "ElasticSearch support for django-tastypie.",
-        long_description = open(os.path.join(os.path.dirname(__file__), 'README.md')).read(),
+        long_description = open(os.path.join(os.path.dirname(__file__), 'README.rst')).read(),
         author = 'Jordi Llonch',
         author_email = 'llonchj@gmail.com',
         url = 'https://github.com/llonchj/django-tastypie-elasticsearch',
