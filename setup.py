@@ -27,7 +27,7 @@ if __name__ == '__main__':
             'Programming Language :: Python',
             'Framework :: Django',
         ),
-        zip_safe = False,
+        zip_safe = True,
         install_requires = (
             'Django>=1.4',
             'django-tastypie>=0.9.11',
