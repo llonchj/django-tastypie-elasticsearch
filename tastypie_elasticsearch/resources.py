@@ -62,7 +62,6 @@ class ESDeclarativeMetaclass(DeclarativeMetaclass):
         #include_fields = getattr(new_class._meta, 'fields', [])
         #excludes = getattr(new_class._meta, 'excludes', [])
         #field_names = new_class.base_fields.keys()
-        print new_class
         
         setattr(new_class._meta, "es_server", getattr(settings, 
             "ES_INDEX_SERVER", "127.0.0.1:9500"))
@@ -105,11 +104,16 @@ class ESResource(Resource):
             doc_type=self._meta.doc_type, indices=self._meta.indices)
     
     def full_dehydrate(self, bundle):
+        #print bundle.data
+        #print bundle.obj, bundle.obj.__class__
+        bundle = super(ESResource, self).full_dehydrate(bundle)
         bundle.data.update(bundle.obj)
-        bundle.data["_id"] = bundle.obj.get_id()
+        #bundle.data["_id"] = bundle.obj.get_id()
+        
         return bundle
     
     def full_hydrate(self, bundle):
+        bundle = super(ESResource, self).full_hydrate(bundle)
         bundle.obj.update(bundle.data)
         return bundle
 
@@ -124,19 +128,22 @@ class ESResource(Resource):
 
         obj = (bundle_or_obj.obj if 
             isinstance(bundle_or_obj, Bundle) else bundle_or_obj)
+        #print obj, obj.__class__
+        #print isinstance(obj, dict)
+        #print
         
-        kwargs[self._meta.detail_uri_name] = (obj["_id"] if 
-            isinstance(obj, dict) else obj.get_id())
+        kwargs[self._meta.detail_uri_name] = (obj.get_id() if 
+            isinstance(obj, pyes.es.ElasticSearchModel) else obj.get("_id"))
 
         if self._meta.api_name is not None:
             kwargs['api_name'] = self._meta.api_name
 
-        #print "get_resource_uri", kwargs, obj
         return self._build_reverse_url("api_dispatch_detail", kwargs=kwargs)
 
     def get_object_list(self, request):
         offset = int(request.GET.get("offset", 0))
         limit = int(request.GET.get("limit", self._meta.limit))
+        
         q = request.GET.get("q")
 
         if q:
@@ -145,7 +152,7 @@ class ESResource(Resource):
             query = pyes.MatchAllQuery()
 
         search = pyes.query.Search(
-            query=query, start=offset, size=limit)
+            query=query, start=offset, size=limit + offset)
 
         # refresh the index before query
         self.es.refresh(self._meta.indices[0])
