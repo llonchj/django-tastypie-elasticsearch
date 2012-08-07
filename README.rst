@@ -9,7 +9,7 @@ Requirements
 * Python_ 2.7+ (not tested with lower version)
 * Django_ 1.4+ (may work on lower version, but not tested)
 * django-tastypie_ 0.9.11+
-* pyes_ >=0.19.1
+* pyes_ 0.19.1+
 
 .. _Python: https://python.org
 .. _Django: http://djangoproject.com
