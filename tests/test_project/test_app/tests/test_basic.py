@@ -27,19 +27,19 @@ class BasicTest(test_runner.ESTestCase):
     c = client.Client()
     
     def setUp(self):
-        self.tr = resources.TestResource()
-        self.es = pyes.ES(self.tr._meta.es_server)
-        for index in self.tr._meta.indices:
+        super(BasicTest, self).setUp()
+
+        self.resource_class = resources.TestResource
+        self.resource_class._meta.indices = ["test"]
+        #self.resource_class._meta.cache = NoCache()
+        
+        es_server = resources.TestResource._meta.es_server
+        indices = self.resource_class._meta.indices
+        
+        self.es = pyes.ES(es_server)
+        for index in indices:
             self.es.delete_index_if_exists(index)
             self.es.create_index_if_missing(index)
-
-        #index = self.tr._meta.indices[0]
-        #for i in range(1, 1000):
-        #    doc = dict(number=i)
-        #    self.es.index(doc, 
-        #        index=index,
-        #        doc_type=tr._meta.doc_type, id=i)
-        #self.es.refresh(tr._meta.indices)
     
     #def tearDown(self):
     #    for index in self.tr._meta.indices:
@@ -106,14 +106,12 @@ class BasicTest(test_runner.ESTestCase):
 
         for i in range(1, 1000):
             #create an object
-            obj = dict(name="Person %d" % i)
+            obj = dict(name="Person %d" % i, number=i)
         
             response = self.c.post(base_url, 
                 json.dumps(obj), 
                 content_type='application/json')
             self.assertEqual(response.status_code, 201)
-
-
         
         # 
         # person1_uri = response['location']
