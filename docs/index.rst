@@ -10,6 +10,8 @@ This Django application provides ElasticSearch_ support for Tastypie_.
 .. _Tastypie: https://github.com/toastdriven/django-tastypie
 .. _ElasticSearch: http://elasticsearch.org/
 
+For now, the API is subject to changes.
+
 Contents
 --------
 
@@ -17,6 +19,7 @@ Contents
   :maxdepth: 2
 
   installation
+  resources
   usage
 
 Source Code and Issue Tracker
