@@ -8,7 +8,7 @@ from tastypie_elasticsearch import resources
 
 from test_project.test_app.models import *
 
-class TestResource(resources.ESResource):
+class TestResource(resources.ElasticSearch):
     #id = fields.CharField(attribute='get_id')
 
     class Meta:

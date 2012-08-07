@@ -13,4 +13,4 @@ __contact__ = "llonchj@gmail.com"
 __homepage__ = "http://github.com/llonchj/django-tastypie-elasticsearch/"
 __docformat__ = "restructuredtext"
 
-from .resources import ESResource
+from .resources import ElasticSearch

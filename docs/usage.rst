@@ -7,7 +7,7 @@ their tutorial_ first.
 
 .. _tutorial: http://django-tastypie.readthedocs.org/en/latest/tutorial.html
 
-The main difference is when you are defining API resource files. There you must use ``ESResource`` instead of ``ModelResource`` or ``Resource``.
+The main difference is when you are defining API resource files. There you must use ``tastypie_elasticsearch.resources.ElasticSearch`` instead of ``ModelResource`` or ``Resource``.
 
 Simple Example
 ==============
@@ -19,7 +19,7 @@ Simple Example
     from tastypie_elasticsearch import resources
     from test_app import documents
     
-    class PersonResource(resources.ESResource):
+    class PersonResource(resources.ElasticSearch):
         class Meta:
 
             es_server = getattr(settings, 

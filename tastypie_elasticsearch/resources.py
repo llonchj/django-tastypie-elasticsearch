@@ -1,3 +1,9 @@
+# -*- coding: utf-8 -*-
+"""
+tastypie.Resource definitions for ElasticSearch
+
+"""
+
 import re
 import sys
 #import uuid
@@ -47,7 +53,7 @@ class FixedPaginator(Paginator):
             encoded_params
         )
 
-class ESDeclarativeMetaclass(DeclarativeMetaclass):
+class ElasticSearchDeclarativeMetaclass(DeclarativeMetaclass):
     """
     This class has the same functionality as its supper ``ModelDeclarativeMetaclass``.
     Only thing it does differently is how it sets ``object_class`` and ``queryset`` attributes.
@@ -58,11 +64,9 @@ class ESDeclarativeMetaclass(DeclarativeMetaclass):
     def __new__(self, name, bases, attrs):
         meta = attrs.get('Meta')
 
-        new_class = super(ESDeclarativeMetaclass, self).__new__(self, name, bases, attrs)
-        #include_fields = getattr(new_class._meta, 'fields', [])
-        #excludes = getattr(new_class._meta, 'excludes', [])
-        #field_names = new_class.base_fields.keys()
-        
+        new_class = super(ElasticSearchDeclarativeMetaclass, 
+            self).__new__(self, name, bases, attrs)
+            
         setattr(new_class._meta, "es_server", getattr(settings, 
             "ES_INDEX_SERVER", "127.0.0.1:9500"))
         setattr(new_class._meta, "es_timeout", getattr(settings, 
@@ -73,12 +77,12 @@ class ESDeclarativeMetaclass(DeclarativeMetaclass):
 
         return new_class
 
-class ESResource(Resource):
+class ElasticSearch(Resource):
     """
     ElasticSearch Resource
     """
     
-    __metaclass__ = ESDeclarativeMetaclass
+    __metaclass__ = ElasticSearchDeclarativeMetaclass
         
     _es = None
     def es__get(self):
@@ -90,10 +94,14 @@ class ESResource(Resource):
     
     def base_urls(self):
         """
-        ElasticSearch uses non w as ID
-        Provide a better dispatch_detail pattern.
+        base_urls - 
+        
+        This function overrides tastypie.Resource changing the
+        `detail_uri_name` url pattern because ElasticSearch uses 
+        non \w in the Id
+
         """
-        base_urls = super(ESResource, self).base_urls()
+        base_urls = super(ElasticSearch, self).base_urls()
         n = []
         for u in base_urls:
             if u.name == "api_dispatch_detail":
@@ -112,20 +120,20 @@ class ESResource(Resource):
     def full_dehydrate(self, bundle):
         #print bundle.data
         #print bundle.obj, bundle.obj.__class__
-        bundle = super(ESResource, self).full_dehydrate(bundle)
+        bundle = super(ElasticSearch, self).full_dehydrate(bundle)
         bundle.data.update(bundle.obj)
         #bundle.data["_id"] = bundle.obj.get_id()
         
         return bundle
     
     def full_hydrate(self, bundle):
-        bundle = super(ESResource, self).full_hydrate(bundle)
+        bundle = super(ElasticSearch, self).full_hydrate(bundle)
         bundle.obj.update(bundle.data)
         return bundle
 
     def get_resource_uri(self, bundle_or_obj=None):
         if bundle_or_obj is None:
-            result = super(ESResource, self).get_resource_uri(bundle_or_obj)
+            result = super(ElasticSearch, self).get_resource_uri(bundle_or_obj)
             return result
 
         kwargs = {
@@ -146,12 +154,12 @@ class ESResource(Resource):
 
         return self._build_reverse_url("api_dispatch_detail", kwargs=kwargs)
 
-    def get_sorting(self, request):
-        sort = request.GET.get("sort")
-        if sort:
+    def get_sorting(self, request, key="order_by"):
+        order_by = request.GET.get(key)
+        if order_by:
             l = []
             
-            items = [i.strip() for i in sort.split(",")]
+            items = [i.strip() for i in order_by.split(",")]
             for item in items:
                 order = "asc"
                 if item.startswith("-"):
@@ -174,10 +182,19 @@ class ESResource(Resource):
             query = pyes.StringQuery(q)
         else:
             query = pyes.MatchAllQuery()
+            
+        start = offset
+        size = 10
+        
+        print "offset ", offset, limit.__class__
+        print "limit ", limit, limit.__class__
+        print "start ", start
+        print "size ", size
+
 
         search = pyes.query.Search(
-            query=query, start=offset, 
-                size=limit + offset +  1 if offset>=0 else 0, sort=sort)
+            query=query, start=start, 
+                size=size, sort=sort)
 
         # refresh the index before query
         self.es.refresh(self._meta.indices[0])
