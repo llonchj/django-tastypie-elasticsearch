@@ -1,15 +1,16 @@
 #!/usr/bin/env python
 
 import os
-
 from setuptools import setup, find_packages
 
-VERSION = '0.1'
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "tests.test_project.settings")
+
+import tastypie_elasticsearch
 
 if __name__ == '__main__':
     setup(
         name = 'django-tastypie-elasticsearch',
-        version = VERSION,
+        version = tastypie_elasticsearch.__version__,
         description = "ElasticSearch support for django-tastypie.",
         long_description = open(os.path.join(os.path.dirname(__file__), 'README.rst')).read(),
         author = 'Jordi Llonch',
