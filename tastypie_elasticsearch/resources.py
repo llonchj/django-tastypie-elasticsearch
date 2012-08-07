@@ -87,17 +87,22 @@ class ESResource(Resource):
         return self._es
     es = property(es__get)
     
-    def prepend_urls(self):
+    def base_urls(self):
         """
         ElasticSearch uses non w as ID
         Provide a better dispatch_detail pattern.
         """
-        return [
-            url(r"^(?P<resource_name>%s)/(?P<%s>.*?)%s$" % (
-                self._meta.resource_name, self._meta.detail_uri_name, 
-                trailing_slash()), self.wrap_view('dispatch_detail'), 
-                name="api_dispatch_detail"),
-        ]
+        base_urls = super(ESResource, self).base_urls()
+        n = []
+        for u in base_urls:
+            if u.name == "api_dispatch_detail":
+                u = url(r"^(?P<resource_name>%s)/(?P<%s>.*?)%s$" % (
+                    self._meta.resource_name, self._meta.detail_uri_name, 
+                    trailing_slash()), self.wrap_view('dispatch_detail'), 
+                    name="api_dispatch_detail")
+            n.append(u)
+        return n
+    
     
     def build_schema(self):
         return self.es.get_mapping(
