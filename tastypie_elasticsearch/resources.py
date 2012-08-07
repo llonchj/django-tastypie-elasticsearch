@@ -69,6 +69,7 @@ class ESDeclarativeMetaclass(DeclarativeMetaclass):
             "ES_INDEX_SERVER_TIMEOUT", 30))
         setattr(new_class._meta, "object_class", dict)
         setattr(new_class._meta, "paginator_class", FixedPaginator)
+        #setattr(new_class._meta, "doc_type", )
 
         return new_class
 
@@ -145,9 +146,27 @@ class ESResource(Resource):
 
         return self._build_reverse_url("api_dispatch_detail", kwargs=kwargs)
 
+    def get_sorting(self, request):
+        sort = request.GET.get("sort")
+        if sort:
+            l = []
+            
+            items = [i.strip() for i in sort.split(",")]
+            for item in items:
+                order = "asc"
+                if item.startswith("-"):
+                    item = item[1:]
+                    order = "desc"
+                l.append({item:order})
+            return l
+        return None
+    
     def get_object_list(self, request):
         offset = int(request.GET.get("offset", 0))
         limit = int(request.GET.get("limit", self._meta.limit))
+
+        sort = self.get_sorting(request)
+
         
         q = request.GET.get("q")
 
@@ -157,7 +176,8 @@ class ESResource(Resource):
             query = pyes.MatchAllQuery()
 
         search = pyes.query.Search(
-            query=query, start=offset, size=limit + offset)
+            query=query, start=offset, 
+                size=limit + offset +  1 if offset>=0 else 0, sort=sort)
 
         # refresh the index before query
         self.es.refresh(self._meta.indices[0])
