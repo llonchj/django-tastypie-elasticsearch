@@ -283,7 +283,7 @@ class BasicTest(ResourceTestCase):
     
         base_url = self.resourceListURI(resource_name)
         response = self.api_client.get(base_url,
-            data={'offset': '42', 'limit': 7})
+            data={'offset': '42', 'limit': 7, "order_by": "number"})
         self.assertEqual(response.status_code, 200)
         response = json.loads(response.content)
     
@@ -295,11 +295,11 @@ class BasicTest(ResourceTestCase):
         for i, obj in enumerate(response['objects']):
             self.assertEqual(obj['name'], "Person %s" % (42 + i))
     
-        offset = response['objects'][0]['id']
+        offset = response['objects'][0]['number']
     
         response = self.api_client.get(
             self.resourceListURI(resource_name),
-            data={'offset': offset, 'limit': 7})
+            data={'offset': offset, 'limit': 7, "order_by": "number"})
         self.assertEqual(response.status_code, 200)
         response = json.loads(response.content)
     
@@ -311,9 +311,10 @@ class BasicTest(ResourceTestCase):
         for i, obj in enumerate(response['objects']):
             self.assertEqual(obj['name'], "Person %s" % (42 + i))
     
-        response = self.c.get(self.resourceListURI(resource_name),
-            data={'offset': offset, 'limit': -7})
-        self.assertEqual(response.status_code, 200)
+        response = self.api_client.get(
+            self.resourceListURI(resource_name),
+            data={'offset': offset, 'limit': -7, "order_by": "number"})
+        self.assertEqual(response.status_code, 400)
         response = json.loads(response.content)
     
         self.assertEqual(response['meta']['total_count'], 100)

@@ -20,7 +20,7 @@ if __name__ == '__main__':
         license = 'AGPLv3',
         packages = find_packages(exclude=('*.tests', '*.tests.*', 'tests.*', 'tests')),
         classifiers = (
-            'Development Status :: 4 - Beta',
+            'Development Status :: 3 - Alpha',
             'Environment :: Web Environment',
             'Intended Audience :: Developers',
             'License :: OSI Approved :: GNU Affero General Public License v3',

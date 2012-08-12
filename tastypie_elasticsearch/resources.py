@@ -30,9 +30,10 @@ class FixedPaginator(Paginator):
         try:
             # QueryDict has a urlencode method that can handle multiple values for the same key
             request_params = self.request_data.copy()
-            if 'limit' in request_params:
+            #print request_params
+            if request_params.has_key("limit"):
                 del request_params['limit']
-            if 'offset' in request_params:
+            if request_params.has_key("offset"):
                 del request_params['offset']
             request_params.update({'limit': limit, 'offset': offset})
             encoded_params = request_params.urlencode()
@@ -170,11 +171,10 @@ class ElasticSearch(Resource):
         return None
     
     def get_object_list(self, request):
-        offset = int(request.GET.get("offset", 0))
-        limit = int(request.GET.get("limit", self._meta.limit))
+        offset = long(request.GET.get("offset", 0))
+        limit = long(request.GET.get("limit", self._meta.limit))
 
         sort = self.get_sorting(request)
-
         
         q = request.GET.get("q")
 
@@ -183,21 +183,21 @@ class ElasticSearch(Resource):
         else:
             query = pyes.MatchAllQuery()
             
-        start = offset
-        size = 10
+        size = (limit + offset) - (1 if offset else 0)
+        start = offset + (2 if offset>=limit else 1)
         
         print "offset ", offset, limit.__class__
         print "limit ", limit, limit.__class__
-        print "start ", start
-        print "size ", size
-
+        print "start ", start, start.__class__
+        print "size ", size, size.__class__
+        print "sort", sort
+        
+        # refresh the index before query
+        self.es.refresh(self._meta.indices[0])
 
         search = pyes.query.Search(
             query=query, start=start, 
                 size=size, sort=sort)
-
-        # refresh the index before query
-        self.es.refresh(self._meta.indices[0])
         
         results = self.es.search(search, indices=self._meta.indices)
         return results
