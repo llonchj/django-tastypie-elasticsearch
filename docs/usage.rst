@@ -13,6 +13,7 @@ Simple Example
 ==============
 
 ::
+
     from django.conf import settings
 
     from tastypie import authorization
