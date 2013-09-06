@@ -1,0 +1,3 @@
+elasticsearch
+Django>=1.4
+django-tastypie>=0.9.11
