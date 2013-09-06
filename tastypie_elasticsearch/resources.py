@@ -6,11 +6,11 @@ tastypie.Resource definitions for ElasticSearch
 
 import re
 import sys
-#import uuid
 
 from django.conf import settings
 from django.conf.urls.defaults import url
 
+from tastypie.fields import NOT_PROVIDED
 from tastypie.bundle import Bundle
 from tastypie.resources import Resource, DeclarativeMetaclass
 from tastypie.paginator import Paginator
