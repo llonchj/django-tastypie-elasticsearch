@@ -11,7 +11,7 @@ from tastypie.test import ResourceTestCase, TestApiClient
 
 from tastypie_elasticsearch import resources as tastypie_elasticsearch_resources
 
-import pyes
+import elasticsearch
 
 from test_project import test_runner
 from test_project.test_app.models import *

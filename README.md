@@ -9,11 +9,11 @@ Requirements
 * Python_ 2.7+ (not tested with lower version)
 * Django_ 1.4+ (may work on lower version, but not tested)
 * django-tastypie_ 0.9.11+
-* pyes_ 0.19.1+
+* elasticsearch official python module
 
 .. _Python: https://python.org
 .. _Django: http://djangoproject.com
-.. _django-tastypie: https://github.com/toastdriven/django-tastypie
+.. _django-tastypie: http://tastypieapi.org
 .. _ElasticSearch: http://elasticsearch.org
 .. _pyes: https://github.com/aparo/pyes
 

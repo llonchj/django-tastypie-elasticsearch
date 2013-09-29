@@ -32,6 +32,6 @@ INSTALLED_APPS = (
     'test_project.test_app',
 )
 
-ES_INDEX_SERVER = "http://127.0.0.1:9200"
+ES_SERVER = "http://127.0.0.1:9200"
 ES_INDEX_NAME = "test"
 

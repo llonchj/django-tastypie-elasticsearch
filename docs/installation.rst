@@ -20,5 +20,5 @@ In your settings.py add ``tastypie`` and ``tastypie_elasticsearch`` to ``INSTALL
 
 You must also add in your settings::
 
-    ES_INDEX_SERVER = 'http://127.0.0.1:9200/'
+    ES_SERVER = 'http://127.0.0.1:9200/'
 
