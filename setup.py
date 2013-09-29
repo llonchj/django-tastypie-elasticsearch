@@ -24,16 +24,16 @@ def parse_requirements(file_name):
 setup(
     name = 'django-tastypie-elasticsearch',
     version = '0.3.0',
-    description = "ElasticSearch support for django-tastypie.",
+    description = "ElasticSearch Resource for django-tastypie.",
     long_description = open(os.path.join(os.path.dirname(__file__), 'README.md')).read(),
     author = 'Jordi Llonch',
     author_email = 'llonchj@gmail.com',
     url = 'https://github.com/llonchj/django-tastypie-elasticsearch',
-    keywords = "REST RESTful tastypie pyes elasticsearch django",
+    keywords = "REST RESTful tastypie elasticsearch django",
     license = 'AGPLv3',
     packages = find_packages(exclude=('*.tests', '*.tests.*', 'tests.*', 'tests')),
     classifiers = (
-        'Development Status :: 3 - Alpha',
+        'Development Status :: 4 - Beta',
         'Environment :: Web Environment',
         'Intended Audience :: Developers',
         'License :: OSI Approved :: GNU Affero General Public License v3',
@@ -44,4 +44,5 @@ setup(
     zip_safe = True,
     install_requires=parse_requirements('requirements.txt'),
     tests_require=parse_requirements('requirements-test.txt'),
+    test_suite = 'tests.runtests.runtests',
 )

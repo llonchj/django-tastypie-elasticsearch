@@ -4,7 +4,7 @@ from django.conf import settings
 from django.test import client, simple, testcases, TestCase
 from django.utils import unittest
 
-import pyes
+import elasticsearch
 
 
 class ESEngineTestSuiteRunner(simple.DjangoTestSuiteRunner):

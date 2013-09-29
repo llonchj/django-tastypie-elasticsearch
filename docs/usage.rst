@@ -23,7 +23,7 @@ Simple Example
         class Meta:
 
             es_server = getattr(settings, 
-                "ES_INDEX_SERVER", "http://127.0.0.1:9200/")
+                "ES_SERVER", "http://127.0.0.1:9200/")
             es_timeout = 20
         
             indices = ["my_elasticsearch_index"]
