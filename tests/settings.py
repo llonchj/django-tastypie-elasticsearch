@@ -22,16 +22,14 @@ MIDDLEWARE_CLASSES = (
     'django.contrib.messages.middleware.MessageMiddleware',
 )
 
-ROOT_URLCONF = 'test_project.urls'
-
-TEST_RUNNER = 'test_project.test_runner.ESEngineTestSuiteRunner'
+ROOT_URLCONF = 'tests.urls'
 
 INSTALLED_APPS = (
     'tastypie',
     'tastypie_elasticsearch',
-    'test_project.test_app',
+    'tests.test_app',
 )
 
-ES_SERVER = "http://127.0.0.1:9200"
+ES_SERVER = "127.0.0.1:9200"
 ES_INDEX_NAME = "test"
 

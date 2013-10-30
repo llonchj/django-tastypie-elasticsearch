@@ -4,7 +4,7 @@ import os
 import re
 from setuptools import setup, find_packages
 
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "tests.test_project.settings")
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "tests.settings")
 
 def parse_requirements(file_name):
     requirements = []
@@ -44,5 +44,5 @@ setup(
     zip_safe = True,
     install_requires=parse_requirements('requirements.txt'),
     tests_require=parse_requirements('requirements-test.txt'),
-    test_suite = 'tests.runtests.runtests',
+    test_suite='tests.runtests.runtests',
 )

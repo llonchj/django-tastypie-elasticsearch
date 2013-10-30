@@ -6,17 +6,13 @@ from tastypie.authorization import DjangoAuthorization
 
 from tastypie_elasticsearch import resources
 
-from test_project.test_app.models import *
-
-class TestResource(resources.ElasticSearch):
+class TestResource(resources.ElasticsearchResource):
     #id = fields.CharField(attribute='get_id')
 
     class Meta:
         resource_name = 'test'
 
-        indices = [getattr(settings, 
-            "ES_INDEX_NAME", "test")]
-            
+        index = getattr(settings, "ES_INDEX_NAME", "test")
         doc_type = "test"
         
         authentication = Authentication()
@@ -24,3 +20,4 @@ class TestResource(resources.ElasticSearch):
 
     def determine_format(self, request):
         return "application/json"
+
