@@ -82,11 +82,6 @@ class ElasticsearchResource(Resource):
         resource_name = self._meta.resource_name
         tr = trailing_slash()
         return [
-            #
-            # search implementation
-            url(r"^(?P<resource_name>%s)/search%s$" % (resource_name, tr), 
-                self.wrap_view('get_search'), name="api_get_search"),
-
             # percolate implementation
             url(r"^(?P<resource_name>%s)/percolate%s$" % (resource_name, tr), 
                 self.wrap_view('get_percolate'), name="api_get_percolate"),
@@ -177,7 +172,7 @@ class ElasticsearchResource(Resource):
             return l
         return None
     
-    def build_search_query(self, request):
+    def build_query(self, request):
         sort = self.get_sorting(request)
         query = []
 
@@ -205,7 +200,7 @@ class ElasticsearchResource(Resource):
     def get_object_list(self, request):
         try:
             kwargs = dict()
-            kwargs['body'] = self.build_search_query(request)
+            kwargs['body'] = self.build_query(request)
             result = self.client.search(self._meta.index, self._meta.doc_type, **kwargs)
         except Exception, exc:
             response = http.HttpBadRequest(str(exc), content_type="text/plain")
@@ -244,7 +239,7 @@ class ElasticsearchResource(Resource):
     def obj_update(self, bundle, request=None, **kwargs):
         bundle.obj = dict(kwargs)
         bundle = self.full_hydrate(bundle)
-        pk = kwargs.get("pk", bundle.obj.get("_id"))
+        pk = kwargs.get('pk', bundle.obj.get('_id'))
 
         result = self.client.update(self._meta.index, self._meta.doc_type, bundle.obj, 
                                     id=pk, refresh=True)
@@ -252,13 +247,13 @@ class ElasticsearchResource(Resource):
         return result
     
     def obj_delete_list(self, request=None, **kwargs):
-        pk = kwargs.get("pk")
+        pk = kwargs.get('pk')
         query = {}
         result = self.client.delete_by_query(self._meta.index, self._meta.doc_type, query)
         return result
 
     def obj_delete(self, request=None, **kwargs):
-        pk = kwargs.get("pk")
+        pk = kwargs.get('pk')
         result = self.client.delete(self._meta.index, self._meta.doc_type, id=pk)
         return result
 
