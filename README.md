@@ -3,6 +3,13 @@ django-tastypie-elasticsearch
 
 ElasticSearch support for django-tastypie
 
+Installation
+------------
+
+```
+    $ pip install django-tastypie-elasticsearch
+```
+
 Requirements
 ------------
 
