@@ -1,134 +1,95 @@
 # -*- coding: utf-8 -*-
 """
-tastypie.Resource definitions for ElasticSearch
+tastypie.Resource definitions for Elasticsearch
 
 """
 
 import re
 import sys
+from copy import deepcopy
 
 from django.conf import settings
-from django.conf.urls.defaults import url
-from django.core.paginator import Paginator, InvalidPage
-from django.http import HttpResponse
+from django.conf.urls import url
 
-from tastypie.fields import NOT_PROVIDED
+from tastypie import http
 from tastypie.bundle import Bundle
+from tastypie.fields import NOT_PROVIDED
 from tastypie.resources import Resource, DeclarativeMetaclass
-from tastypie.paginator import Paginator
 from tastypie.exceptions import NotFound, ImmediateHttpResponse
 from tastypie.utils import trailing_slash
-from tastypie import http
 
 import elasticsearch
 import elasticsearch.exceptions
+from elasticsearch.connection import Urllib3HttpConnection
 
-class ElasticSearchResult(list):
-    def __init__(self, result, query=None):
-        super(ElasticSearchResult, self).__init__(
-            map(lambda s:s["_source"], result["hits"]["hits"]))
+from paginator import ElasticsearchResult, ElasticsearchPaginator
 
-        self.shards = result["_shards"]
-        self.took = result["took"]
-        self.timed_out = result["timed_out"]
-        self.total = result["hits"]["total"]
-        self.max_score = result["hits"]["max_score"]
-        self.facets = result.get("facets", [])
-        self.query = query
-
-class ElasticSearchPaginator(Paginator):
-
-    add_search_info = False
-
-    def get_count(self):
-        return self.objects.total
-
-    def get_slice(self, limit, offset):
-        """
-        Slices the result set to the specified ``limit`` & ``offset``.
-        """
-        return self.objects
-
-    def page(self):
-        output = super(ElasticSearchPaginator, self).page()
-
-        objects = self.objects
-        
-        if self.add_search_info:
-            search = dict(
-                took=objects.took,
-                max_score=objects.max_score,
-                shards=objects.shards,
-            )
-            if objects.timed_out:
-                search['timed_out'] = objects.timed_out
-            if objects.query:
-                search['query'] = objects.query
-            
-            output['meta']['search'] = search
-        else:
-            output['meta']['took'] = objects.took
-        if len(objects.facets):
-            output["facets"] = objects.facets
-        return output
-    
-
-class ElasticSearchDeclarativeMetaclass(DeclarativeMetaclass):
+class ElasticsearchDeclarativeMetaclass(DeclarativeMetaclass):
     """
     This class has the same functionality as its supper ``ModelDeclarativeMetaclass``.
-    Changing only some ElasticSearch intrinsics
+    Changing only some Elasticsearch intrinsics
     """
 
     def __new__(self, name, bases, attrs):
         meta = attrs.get('Meta')
 
-        new_class = super(ElasticSearchDeclarativeMetaclass, 
+        new_class = super(ElasticsearchDeclarativeMetaclass, 
             self).__new__(self, name, bases, attrs)
 
-        setattr(new_class._meta, "es_server", getattr(settings, 
-            "ES_SERVER", "127.0.0.1:9500"))
-        setattr(new_class._meta, "es_timeout", getattr(settings, 
-            "ES_TIMEOUT", 30))
+        override = {
+            'object_class': dict,
+            'include_mapping_fields': True,
+            'paginator_class': ElasticsearchPaginator,
+        }
+        defaults = {
+            'es_server': getattr(settings, "ES_SERVER", "127.0.0.1:9200"),
+            'es_connection_class': Urllib3HttpConnection,
+            'es_timeout': 30,
+        }
+        for k,v in override.iteritems():
+            setattr(new_class._meta, k, v)
 
-        setattr(new_class._meta, "object_class", dict)
-
-        setattr(new_class._meta, "include_mapping_fields", True)
-
-        setattr(new_class._meta, "paginator_class", ElasticSearchPaginator)
-
-        #setattr(new_class._meta, "doc_type", )
-        #setattr(new_class._meta, "index", )
+        for k,v in defaults.iteritems():
+            if not hasattr(new_class._meta, k):
+                setattr(new_class._meta, k, v)
 
         return new_class
 
-class ElasticSearch(Resource):
+class ElasticsearchResource(Resource):
     """
-    ElasticSearch Base Resource
+    Elasticsearch Base Resource
     
     """
     
-    __metaclass__ = ElasticSearchDeclarativeMetaclass
+    __metaclass__ = ElasticsearchDeclarativeMetaclass
 
     _es = None
     def es__get(self):
         if self._es is None:
-            host, port = self._meta.es_server.split(":")
-            hosts = {host, port}
-            self._es = elasticsearch.Elasticsearch(hosts, 
-                                                    timeout=self._meta.es_timeout)
+            hosts = []
+            for server in self._meta.es_server.split(","):
+                host, port = server.strip().split(":")
+                hosts.append({"host":host, "port":port})
+
+            self._es = elasticsearch.Elasticsearch(hosts=hosts, 
+                                                   connection_class=self._meta.es_connection_class,
+                                                   timeout=self._meta.es_timeout)
         return self._es
     client = property(es__get)
-    
+
     def prepend_urls(self):
-        """Override Resource url map to fit ElasticSearch Id syntax"""
+        """Override Resource url map to fit search Id syntax"""
         resource_name = self._meta.resource_name
         tr = trailing_slash()
         return [
             #
             # search implementation
-            #
             url(r"^(?P<resource_name>%s)/search%s$" % (resource_name, tr), 
                 self.wrap_view('get_search'), name="api_get_search"),
+
+            # percolate implementation
+            url(r"^(?P<resource_name>%s)/percolate%s$" % (resource_name, tr), 
+                self.wrap_view('get_percolate'), name="api_get_percolate"),
 
             # default implementation
             url(r"^(?P<resource_name>%s)%s$" % (resource_name, tr), 
@@ -145,7 +106,7 @@ class ElasticSearch(Resource):
         ]
 
     def build_schema(self):
-        schema = super(ElasticSearch, self).build_schema()
+        schema = super(ElasticsearchResource, self).build_schema()
         
         if self._meta.include_mapping_fields:
             mapping = self.client.indices.get_mapping(self._meta.index, self._meta.doc_type)
@@ -169,48 +130,36 @@ class ElasticSearch(Resource):
         return schema
     
     def full_dehydrate(self, bundle, for_list=False):
-        bundle = super(ElasticSearch, self).full_dehydrate(bundle, for_list)
+        bundle = super(ElasticsearchResource, self).full_dehydrate(bundle, for_list)
 
-        kwargs = dict(resource_name=self._meta.resource_name, pk=bundle.obj.get("id"))
+        kwargs = dict(resource_name=self._meta.resource_name, pk=bundle.obj.get("_id"))
         if self._meta.api_name is not None:
             kwargs['api_name'] = self._meta.api_name
         bundle.data["resource_uri"] = self._build_reverse_url('api_dispatch_detail', kwargs=kwargs)
-        
-        bundle.data.update(bundle.obj)
+
+        bundle.data.update(bundle.obj.get("_source", bundle.obj.get("fields")))
         return bundle
     
     def full_hydrate(self, bundle):
-        bundle = super(ElasticSearch, self).full_hydrate(bundle)
+        bundle = super(ElasticsearchResource, self).full_hydrate(bundle)
         bundle.obj.update(bundle.data)
         return bundle
 
-    def obj_get(self, request=None, **kwargs):
-        pk = kwargs.get("pk")
-        try:
-            result =  self.client.get(self._meta.index, pk, self._meta.doc_type)
-        except elasticsearch.exceptions.NotFoundError, exc:
-            response = http.HttpNotFound("Not found", content_type="text/plain")
-            raise ImmediateHttpResponse(response)
-        except Exception, exc:
-            response = http.HttpNotFound(str(exc), content_type="text/plain")
-            raise ImmediateHttpResponse(response)
-        else:
-            return result.get("_source")
-
     def get_resource_uri(self, bundle_or_obj=None):
         if bundle_or_obj is None:
-            result = super(ElasticSearch, self).get_resource_uri(bundle_or_obj)
+            result = super(ElasticsearchResource, self).get_resource_uri(bundle_or_obj)
             return result
-    
-        kwargs = {
-            'resource_name': self._meta.resource_name,
-        }
     
         obj = (bundle_or_obj.obj if 
             isinstance(bundle_or_obj, Bundle) else bundle_or_obj)
+
+        kwargs = {
+            'resource_name': self._meta.resource_name,
+            'pk': obj.get('_id'),
+        }
         if self._meta.api_name is not None:
             kwargs['api_name'] = self._meta.api_name
-    
+            
         return self._build_reverse_url("api_dispatch_detail", kwargs=kwargs)
 
     def get_sorting(self, request, key="order_by"):
@@ -228,16 +177,12 @@ class ElasticSearch(Resource):
             return l
         return None
     
-    
     def build_search_query(self, request):
-        offset = long(request.GET.get("offset", 0))
-        limit = long(request.GET.get("limit", self._meta.limit))
-
         sort = self.get_sorting(request)
         query = []
 
         for key, value in request.GET.items():
-            if key not in ["offset", "limit", "query_type", "format"]:
+            if key not in ["offset", "limit", "query_type", "format", 'order_by']:
                 q = {".".join([self._meta.doc_type, key]): value}
                 query.append({"text":q})
 
@@ -245,66 +190,81 @@ class ElasticSearch(Resource):
             # show all
             query.append({"match_all": {}})
 
-        start = offset + (2 if offset>=limit else 1)
-
         return {
             "query": {
                 "bool": {
                     "must": query,
                 },
             },
-            "from": start,
-            "size": limit,
+            "from": long(request.GET.get("offset", 0)),
+            "size": long(request.GET.get("limit", self._meta.limit)),
             "sort": sort or [],
         }
         
     
     def get_object_list(self, request):
-        query = self.build_search_query(request)
         try:
-            result = self.client.search(self._meta.index, self._meta.doc_type, query)
+            kwargs = dict()
+            kwargs['body'] = self.build_search_query(request)
+            result = self.client.search(self._meta.index, self._meta.doc_type, **kwargs)
         except Exception, exc:
-            response = http.HttpNotFound(str(exc), content_type="text/plain")
+            response = http.HttpBadRequest(str(exc), content_type="text/plain")
             raise ImmediateHttpResponse(response)
         else:
-            return ElasticSearchResult(result, query)
+            return ElasticsearchResult(result, kwargs)
             
     def obj_get_list(self, request=None, **kwargs):
         # Filtering disabled for brevity...
         return self.get_object_list(kwargs['bundle'].request)
 
+    def obj_get(self, request=None, **kwargs):
+        pk = kwargs.get("pk")
+        try:
+            result =  self.client.get(self._meta.index, pk, self._meta.doc_type)
+        except elasticsearch.exceptions.NotFoundError, exc:
+            response = http.HttpNotFound("Not found", content_type="text/plain")
+            raise ImmediateHttpResponse(response)
+        except Exception, exc:
+            msg = "%s(%s)" % (exc.__class__.__name__, exc)
+            response = http.HttpApplicationError(msg, content_type="text/plain")
+            raise ImmediateHttpResponse(response)
+        else:
+            return result
+
     def obj_create(self, bundle, request=None, **kwargs):
-        raise NotImplemented
         bundle.obj = dict(kwargs)
         bundle = self.full_hydrate(bundle)
         pk = kwargs.get("pk", bundle.obj.get("_id"))
-        result = self.client.index(self._meta.index, self._meta.doc_type, bundle.obj, id=pk)
+
+        result = self.client.index(self._meta.index, self._meta.doc_type, bundle.obj, 
+                                   id=pk, refresh=True)
         result.update(bundle.obj)
         return result
     
     def obj_update(self, bundle, request=None, **kwargs):
-        raise NotImplemented
         bundle.obj = dict(kwargs)
         bundle = self.full_hydrate(bundle)
         pk = kwargs.get("pk", bundle.obj.get("_id"))
-            #bundle.obj.get("_id", str(uuid.uuid1())) )
-    
-        result = self.client.update(self._meta.index, self._meta.doc_type, bundle.obj, id=pk)
+
+        result = self.client.update(self._meta.index, self._meta.doc_type, bundle.obj, 
+                                    id=pk, refresh=True)
         result.update(bundle.obj)
         return result
     
     def obj_delete_list(self, request=None, **kwargs):
-        raise NotImplemented
         pk = kwargs.get("pk")
         query = {}
         result = self.client.delete_by_query(self._meta.index, self._meta.doc_type, query)
         return result
 
     def obj_delete(self, request=None, **kwargs):
-        raise NotImplemented
         pk = kwargs.get("pk")
         result = self.client.delete(self._meta.index, self._meta.doc_type, id=pk)
         return result
+
+    def get_percolate(self, request, **kwargs):
+        """Search interface"""
+        return 1
 
     def get_search(self, request, **kwargs):
         """Search interface"""
@@ -329,17 +289,3 @@ class ElasticSearch(Resource):
         to_be_serialized[self._meta.collection_name] = bundles
         to_be_serialized = self.alter_list_data_to_serialize(request, to_be_serialized)
         return self.create_response(request, to_be_serialized)
-
-    def create_response(self, request, data, response_class=HttpResponse, **response_kwargs):
-        """
-        Extracts the common "which-format/serialize/return-response" cycle.
-
-        Mostly a useful shortcut/hook.
-        """
-        desired_format = self.determine_format(request)
-        serialized = self.serialize(request, data, desired_format)
-        
-        format = (format if 'charset' in desired_format else 
-                "%s; charset=%s" % (desired_format, 'utf-8'))
-        
-        return response_class(content=serialized, content_type=format, **response_kwargs)
