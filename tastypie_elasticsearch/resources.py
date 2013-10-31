@@ -6,6 +6,7 @@ tastypie.Resource definitions for Elasticsearch
 
 import re
 import sys
+import json
 from copy import deepcopy
 
 from django.conf import settings
@@ -258,29 +259,18 @@ class ElasticsearchResource(Resource):
         return result
 
     def get_percolate(self, request, **kwargs):
-        """Search interface"""
-        return 1
-
-    def get_search(self, request, **kwargs):
-        """Search interface"""
-        self.method_check(request, allowed=['get'])
+        """ Percolate call """
+        self.method_check(request, allowed=['post'])
         self.is_authenticated(request)
         self.throttle_check(request)
 
-        result = self.get_object_list(request)
-        paginator = self._meta.paginator_class(request.GET, result, 
-            resource_uri=self.get_resource_uri(), limit=self._meta.limit, 
-            max_limit=self._meta.max_limit, collection_name=self._meta.collection_name)
+        # Do the query.
+        result = self.client.percolate(self._meta.index, self._meta.doc_type, 
+                                        body=dict(doc=json.loads(request.body)))
+        object_list = {
+            'meta': result,
+        }
 
-        to_be_serialized = paginator.page()
+        self.log_throttled_access(request)
+        return self.create_response(request, object_list)
 
-        # Dehydrate the bundles in preparation for serialization.
-        bundles = []
-
-        for obj in to_be_serialized[self._meta.collection_name]:
-            bundle = self.build_bundle(obj=obj, request=request)
-            bundles.append(self.full_dehydrate(bundle, for_list=True))
-
-        to_be_serialized[self._meta.collection_name] = bundles
-        to_be_serialized = self.alter_list_data_to_serialize(request, to_be_serialized)
-        return self.create_response(request, to_be_serialized)

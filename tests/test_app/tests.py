@@ -219,4 +219,28 @@ class BasicTest(TastypieElasticsearchTest):
             data={'offset': offset, 'limit': -7, "order_by": "number"})
         self.assertEqual(response.status_code, 400)
     
-    
+    def test_percolator(self):
+        resource_name = 'test'
+        base_url = self.resourceListURI(resource_name)
+
+        for i in range(100):
+            response = self.api_client.post(base_url,
+                format="json", data=dict(
+                    name="Person %d" % (i + 1), number=i+1))
+
+        
+        #get the object
+        response = self.api_client.post(base_url + 'percolate/', 
+            format='json', data={"body":{"name":"python"}})
+
+        self.assertHttpOK(response)
+
+        result = json.loads(response.content)
+
+        self.assertTrue("meta" in result.keys())
+        meta = result.get("meta")
+
+        self.assertTrue("matches" in meta)
+        self.assertTrue(isinstance(meta.get('matches'), list))
+
+        
