@@ -21,11 +21,11 @@ import resources
 # TODO: Use Tastypie's testcase class for tests?
 
 @utils.override_settings(DEBUG=True)
-class BasicTest(ResourceTestCase):
+class TastypieElasticsearchTest(ResourceTestCase):
     api_name = 'v1'
     
     def setUp(self):
-        super(BasicTest, self).setUp()
+        super(TastypieElasticsearchTest, self).setUp()
 
         self.resource_class = resources.TestResource
         self.resource_class._meta.index = "test"
@@ -64,6 +64,9 @@ class BasicTest(ResourceTestCase):
     def fullURItoAbsoluteURI(self, uri):
         scheme, netloc, path, query, fragment = urlparse.urlsplit(uri)
         return urlparse.urlunsplit((None, None, path, query, fragment))
+    
+
+class BasicTest(TastypieElasticsearchTest):
     
     def testCRUD(self):
         # Testing POST
