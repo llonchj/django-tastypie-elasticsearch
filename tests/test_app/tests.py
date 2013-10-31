@@ -92,11 +92,20 @@ class BasicTest(ResourceTestCase):
         
         # update object
         obj1 = json.loads(response.content)
+        del obj1["resource_uri"]
         
-        obj1["first_name"] = "Person 1 UPDATED"
+        obj1["first_name"] = u"Person 1 UPDATED"
         response = self.api_client.post(base_url, format="json", data=obj1)
         self.assertHttpCreated(response)
-        
+
+        #get the *updated?* object
+        response = self.api_client.get(obj_uri)
+        self.assertHttpOK(response)
+        #and compare it
+        data = json.loads(response.content)
+        for k, v in obj1.iteritems():
+            self.assertEqual(data[k], v)
+
         #delete the object
         response = self.api_client.delete(obj_uri)
         self.assertHttpAccepted(response)
@@ -117,16 +126,6 @@ class BasicTest(ResourceTestCase):
                 format="json", data=obj)
             self.assertHttpCreated(response)
 
-        response = json.loads(response.content)
-        
-        self.assertEqual(response['name'], 'Person 1 PATCHED')
-        self.assertEqual(response['optional'], 'Optional PATCHED')
-        
-        response = self.c.patch(customer2_uri, 
-                                '{"person": "%s"}' % self.fullURItoAbsoluteURI(person1_uri),
-                                content_type='application/json')
-                                
-        self.assertEqual(response.status_code, 202)
 
     def test_invalid(self):
         # Invalid ObjectId
@@ -164,14 +163,17 @@ class BasicTest(ResourceTestCase):
                         number = obj.get("number")
                         sq.append(number)
     
-                    ran = [i for i in reversed(range(100 - (len(objects) - 1), 100 + 1))] if ordering.startswith("-") else range(1, len(objects) + 1)
+                    ran = ([i for i in reversed(range(100 - (len(objects) - 1), 100 + 1))] 
+                            if ordering.startswith("-") else range(1, len(objects) + 1))
                     self.assertEqual(sq, ran)
     
     def test_pagination(self):
         resource_name = 'test'
         base_url = self.resourceListURI(resource_name)
         
-        for i in range(10):
+        count = 100
+        
+        for i in range(count):
             response = self.api_client.post(base_url,
                 format="json", data=dict(name="Person %d" % (i + 1), number=i+1))
             self.assertEqual(response.status_code, 201)
@@ -183,7 +185,7 @@ class BasicTest(ResourceTestCase):
         self.assertEqual(response.status_code, 200)
 
         response = json.loads(response.content)
-
+        
         self.assertEqual(response['meta']['total_count'], 100)
         self.assertEqual(response['meta']['offset'], 42)
         self.assertEqual(response['meta']['limit'], 7)
@@ -200,7 +202,7 @@ class BasicTest(ResourceTestCase):
         self.assertEqual(response.status_code, 200)
         response = json.loads(response.content)
     
-        self.assertEqual(response['meta']['total_count'], 100)
+        self.assertEqual(response['meta']['total_count'], count)
         self.assertEqual(response['meta']['offset'], offset)
         self.assertEqual(response['meta']['limit'], 7)
         self.assertEqual(len(response['objects']), 7)

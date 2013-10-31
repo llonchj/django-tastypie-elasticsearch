@@ -12,7 +12,7 @@ class TestResource(resources.ElasticsearchResource):
     class Meta:
         resource_name = 'test'
 
-        index = getattr(settings, "ES_INDEX_NAME", "test")
+        index = "test"
         doc_type = "test"
         
         authentication = Authentication()
