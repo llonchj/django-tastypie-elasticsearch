@@ -22,7 +22,6 @@ Requirements
 .. _Django: http://djangoproject.com
 .. _django-tastypie: http://tastypieapi.org
 .. _ElasticSearch: http://elasticsearch.org
-.. _pyes: https://github.com/aparo/pyes
 
 How to use?
 -----------
