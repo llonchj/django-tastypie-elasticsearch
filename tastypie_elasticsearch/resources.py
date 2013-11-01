@@ -11,13 +11,14 @@ from copy import deepcopy
 
 from django.conf import settings
 from django.conf.urls import url
+from django.core.exceptions import ObjectDoesNotExist, MultipleObjectsReturned, ValidationError
 
 from tastypie import http
 from tastypie.bundle import Bundle
 from tastypie.fields import NOT_PROVIDED
-from tastypie.resources import Resource, DeclarativeMetaclass
+from tastypie.resources import Resource, DeclarativeMetaclass, convert_post_to_patch
 from tastypie.exceptions import NotFound, ImmediateHttpResponse
-from tastypie.utils import trailing_slash
+from tastypie.utils import dict_strip_unicode_keys, trailing_slash
 
 import elasticsearch
 import elasticsearch.exceptions
@@ -273,4 +274,146 @@ class ElasticsearchResource(Resource):
 
         self.log_throttled_access(request)
         return self.create_response(request, object_list)
+
+    def patch_list(self, request, **kwargs):
+        """
+        Updates a collection in-place.
+
+        The exact behavior of ``PATCH`` to a list resource is still the matter of
+        some debate in REST circles, and the ``PATCH`` RFC isn't standard. So the
+        behavior this method implements (described below) is something of a
+        stab in the dark. It's mostly cribbed from GData, with a smattering
+        of ActiveResource-isms and maybe even an original idea or two.
+
+        The ``PATCH`` format is one that's similar to the response returned from
+        a ``GET`` on a list resource::
+
+            {
+              "objects": [{object}, {object}, ...],
+              "deleted_objects": ["URI", "URI", "URI", ...],
+            }
+
+        For each object in ``objects``:
+
+            * If the dict does not have a ``resource_uri`` key then the item is
+              considered "new" and is handled like a ``POST`` to the resource list.
+
+            * If the dict has a ``resource_uri`` key and the ``resource_uri`` refers
+              to an existing resource then the item is a update; it's treated
+              like a ``PATCH`` to the corresponding resource detail.
+
+            * If the dict has a ``resource_uri`` but the resource *doesn't* exist,
+              then this is considered to be a create-via-``PUT``.
+
+        Each entry in ``deleted_objects`` referes to a resource URI of an existing
+        resource to be deleted; each is handled like a ``DELETE`` to the relevent
+        resource.
+
+        In any case:
+
+            * If there's a resource URI it *must* refer to a resource of this
+              type. It's an error to include a URI of a different resource.
+
+            * ``PATCH`` is all or nothing. If a single sub-operation fails, the
+              entire request will fail and all resources will be rolled back.
+
+          * For ``PATCH`` to work, you **must** have ``put`` in your
+            :ref:`detail-allowed-methods` setting.
+
+          * To delete objects via ``deleted_objects`` in a ``PATCH`` request you
+            **must** have ``delete`` in your :ref:`detail-allowed-methods`
+            setting.
+
+        Substitute appropriate names for ``objects`` and
+        ``deleted_objects`` if ``Meta.collection_name`` is set to something
+        other than ``objects`` (default).
+        """
+        request = convert_post_to_patch(request)
+        deserialized = self.deserialize(request, request.body, format=request.META.get('CONTENT_TYPE', 'application/json'))
+
+        collection_name = self._meta.collection_name
+        deleted_collection_name = 'deleted_%s' % collection_name
+        if collection_name not in deserialized:
+            raise BadRequest("Invalid data sent: missing '%s'" % collection_name)
+
+        if len(deserialized[collection_name]) and 'put' not in self._meta.detail_allowed_methods:
+            raise ImmediateHttpResponse(response=http.HttpMethodNotAllowed())
+
+        bulk_commands = []
+        
+        bundles_seen = []
+
+        def index(bundle, command='index'):
+            command = {command:{'_id':bundle.data["_id"]}}
+            bulk_commands.append(command)
+            command = bundle.obj
+            bulk_commands.append(command)
+
+        for data in deserialized[collection_name]:
+            # If there's a resource_uri then this is either an
+            # update-in-place or a create-via-PUT.
+            if "resource_uri" in data:
+                try:
+                    uri = data.pop('resource_uri')
+
+                    obj = self.get_via_uri(uri, request=request)
+
+                    # The object does exist, so this is an update-in-place.
+                    bundle = self.build_bundle(obj=obj['_source'], request=request)
+                    bundle.data.update(data)
+                    bundle = self.full_hydrate(bundle)
+
+                    bulk_commands.append({'update':{'_id':bundle.data["_id"]}})
+                    bulk_commands.append({'doc':bundle.obj})
+                    
+                except (ObjectDoesNotExist, MultipleObjectsReturned):
+                    # The object referenced by resource_uri doesn't exist,
+                    # so this is a create-by-PUT equivalent.
+                    data = self.alter_deserialized_detail_data(request, data)
+                    bundle = self.build_bundle(data=dict_strip_unicode_keys(data), request=request)
+                    #self.obj_create(bundle=bundle)
+                    bundle = self.full_hydrate(bundle)
+                    index(bundle)
+            else:
+                # There's no resource URI, so this is a create call just
+                # like a POST to the list resource.
+                data = self.alter_deserialized_detail_data(request, data)
+                bundle = self.build_bundle(data=dict_strip_unicode_keys(data), request=request)
+                #self.obj_create(bundle=bundle)
+                bundle = self.full_hydrate(bundle)
+                index(bundle)
+
+            bundles_seen.append(bundle)
+
+        deleted_collection = deserialized.get(deleted_collection_name, [])
+
+        if deleted_collection:
+            if 'delete' not in self._meta.detail_allowed_methods:
+                raise ImmediateHttpResponse(response=http.HttpMethodNotAllowed())
+
+            for uri in deleted_collection:
+                obj = self.get_via_uri(uri, request=request)
+                bundle = self.build_bundle(obj=obj['_source'], request=request)
+                #self.obj_delete(bundle=bundle)
+                command = {"delete":{'_id':bundle['pk']}}
+                bulk_commands.append(command)
+
+        if len(bulk_commands):
+            try:
+                result = self.client.bulk(bulk_commands, refresh=True,
+                                          index=self._meta.index, 
+                                          doc_type=self._meta.doc_type)
+            except Exception, exc:
+                response = http.HttpBadRequest(str(exc), content_type="text/plain")
+                raise ImmediateHttpResponse(response)
+            else:
+                if not self._meta.always_return_data:
+                    return http.HttpAccepted(json.dumps(result))
+                else:
+                    to_be_serialized = {}
+                    to_be_serialized['objects'] = [self.full_dehydrate(bundle, for_list=True) for bundle in bundles_seen]
+                    to_be_serialized = self.alter_list_data_to_serialize(request, to_be_serialized)
+                    return self.create_response(request, to_be_serialized, response_class=http.HttpAccepted)
+        else:
+            return http.HttpBadRequest()
 
