@@ -4,7 +4,7 @@ import os
 import re
 from setuptools import setup, find_packages
 
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "tests.test_project.settings")
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "tests.settings")
 
 def parse_requirements(file_name):
     requirements = []
@@ -23,7 +23,7 @@ def parse_requirements(file_name):
 
 setup(
     name = 'django-tastypie-elasticsearch',
-    version = '0.3.0',
+    version = '0.4.0',
     description = "ElasticSearch Resource for django-tastypie.",
     long_description = open(os.path.join(os.path.dirname(__file__), 'README.md')).read(),
     author = 'Jordi Llonch',
@@ -44,5 +44,5 @@ setup(
     zip_safe = True,
     install_requires=parse_requirements('requirements.txt'),
     tests_require=parse_requirements('requirements-test.txt'),
-    test_suite = 'tests.runtests.runtests',
+    test_suite='tests.runtests.runtests',
 )
