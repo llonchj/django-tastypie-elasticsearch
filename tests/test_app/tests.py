@@ -79,13 +79,13 @@ class BasicTest(TastypieElasticsearchTest):
         
         response = self.api_client.post(base_url, format="json", data=obj)
         self.assertHttpCreated(response)
-
+    
         obj_uri = response.get("Location")
         
         # get the list
         response = self.api_client.get(base_url)
         self.assertHttpOK(response)
-
+    
         response = json.loads(response.content)
         self.assertEqual(len(response["objects"]), 1)
         
@@ -100,7 +100,7 @@ class BasicTest(TastypieElasticsearchTest):
         obj1["first_name"] = u"Person 1 UPDATED"
         response = self.api_client.post(base_url, format="json", data=obj1)
         self.assertHttpCreated(response)
-
+    
         #get the *updated?* object
         response = self.api_client.get(obj_uri)
         self.assertHttpOK(response)
@@ -108,7 +108,7 @@ class BasicTest(TastypieElasticsearchTest):
         data = json.loads(response.content)
         for k, v in obj1.iteritems():
             self.assertEqual(data[k], v)
-
+    
         #delete the object
         response = self.api_client.delete(obj_uri)
         self.assertHttpAccepted(response)
@@ -121,24 +121,44 @@ class BasicTest(TastypieElasticsearchTest):
     def test_bulk(self):
         resource_name = 'test'
         base_url = self.resourceListURI(resource_name)
-    
-        for i in range(10):
-            #create an object
-            obj = dict(first_name="Person %d" % i, number=i)
-            response = self.api_client.post(base_url, 
-                format="json", data=obj)
-            self.assertHttpCreated(response)
 
+        #add an object to be updated
+        obj = dict(_id=9999999, first_name="John", last_name="Doe", untouched=1)
+        response = self.api_client.post(base_url, format="json", data=obj)
+        self.assertHttpCreated(response)
+        obj_uri = response.get("Location")
+        obj_uri = '/' + '/'.join(obj_uri.split('/')[3:])
 
-    def test_invalid(self):
-        # Invalid ObjectId
-        resource_name = 'test'
-        base_url = self.resourceListURI(resource_name)
-    
-        response = self.api_client.get(base_url + 'foobar/')
-        self.assertEqual(response.status_code, 404)
-    
-    
+        
+        objects = []
+        deleted_objects = []
+        
+        obj = {
+            '_id': 9999999, 
+            'first_name': 'John', 
+            'last_name': 'Doe Updated',
+            'updated': True,
+            'resource_uri': obj_uri,
+        }
+        objects.append(obj)
+        
+        for i in range(5):
+            obj = {
+                "_id": (i+1000),
+                "first_name": "Person %d" % (i+1000),
+                "last_name": "Smith",
+                "bulk": True,
+            }
+            objects.append(obj)
+        
+        data = {
+            "objects":objects,
+            "deleted_objects":deleted_objects,
+        }
+
+        response = self.api_client.patch(base_url, format="json", data=data)
+        self.assertHttpAccepted(response)
+
     def test_ordering(self):
         resource_name = 'test'
         base_url = self.resourceListURI(resource_name)
@@ -182,11 +202,11 @@ class BasicTest(TastypieElasticsearchTest):
             self.assertEqual(response.status_code, 201)
         
         base_url = self.resourceListURI(resource_name)
-
+    
         response = self.api_client.get(base_url,
             data={'offset': '42', 'limit': 7, "order_by": "number"})
         self.assertEqual(response.status_code, 200)
-
+    
         response = json.loads(response.content)
         
         self.assertEqual(response['meta']['total_count'], 100)
@@ -212,7 +232,7 @@ class BasicTest(TastypieElasticsearchTest):
     
         for i, obj in enumerate(response['objects']):
             self.assertEqual(obj['name'], "Person %s" % (44 + i))
-
+    
         # invalid limit parameter, fail
         response = self.api_client.get(
             self.resourceListURI(resource_name),
@@ -222,25 +242,25 @@ class BasicTest(TastypieElasticsearchTest):
     def test_percolator(self):
         resource_name = 'test'
         base_url = self.resourceListURI(resource_name)
-
+    
         for i in range(100):
             response = self.api_client.post(base_url,
                 format="json", data=dict(
                     name="Person %d" % (i + 1), number=i+1))
-
+    
         
         #get the object
         response = self.api_client.post(base_url + 'percolate/', 
             format='json', data={"body":{"name":"python"}})
-
+    
         self.assertHttpOK(response)
-
+    
         result = json.loads(response.content)
-
+    
         self.assertTrue("meta" in result.keys())
         meta = result.get("meta")
-
+    
         self.assertTrue("matches" in meta)
         self.assertTrue(isinstance(meta.get('matches'), list))
-
+    
         
