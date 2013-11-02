@@ -49,6 +49,7 @@ class ElasticsearchDeclarativeMetaclass(DeclarativeMetaclass):
             'es_timeout': 30,
             'create_if_missing': False,
             'index_settings': {},
+            'write_index': None,
         }
         for k,v in override.iteritems():
             setattr(new_class._meta, k, v)
@@ -64,15 +65,25 @@ class ElasticsearchResource(Resource):
     Elasticsearch Base Resource
     
     """
-    
+
     __metaclass__ = ElasticsearchDeclarativeMetaclass
-    
+
     def __init__(self, api_name=None, *args, **kwargs):
         super(ElasticsearchResource, self).__init__(api_name, *args, **kwargs)
 
-        # create the index if missing and create_if_missing
-        if self._meta.create_if_missing and not self.client.indices.exists(self._meta.index):
-            self.client.indices.create(self._meta.index, body=self._meta.index_settings)
+        if self._meta.write_index is None:
+            self._meta.write_index =  self._meta.index
+
+        if self._meta.create_if_missing:
+            # create the index if missing and create_if_missing
+            if not self.client.indices.exists(self._meta.write_index):
+                self.client.indices.create(self._meta.write_index, body=self._meta.index_settings)
+
+            # create the alias if missing and create_if_missing
+            if (self._meta.write_index != self._meta.index and 
+                    not self.client.indices.exists_alias(self._meta.index, 
+                                                         self._meta.write_index)):
+                self.client.indices.put_alias(self._meta.write_index, self._meta.index)
 
     _es = None
     def es__get(self):
