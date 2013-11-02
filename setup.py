@@ -23,7 +23,7 @@ def parse_requirements(file_name):
 
 setup(
     name = 'django-tastypie-elasticsearch',
-    version = '0.5.0',
+    version = '0.5.1',
     description = "ElasticSearch Resource for django-tastypie.",
     long_description = open(os.path.join(os.path.dirname(__file__), 'README.md')).read(),
     author = 'Jordi Llonch',
