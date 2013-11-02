@@ -269,7 +269,7 @@ class ElasticsearchResource(Resource):
     
     def obj_delete_list(self, request=None, **kwargs):
         pk = kwargs.get('pk')
-        query = {}
+        query = request.body
         result = self.client.delete_by_query(self._meta.index, self._meta.doc_type, query)
         return result
 
