@@ -47,6 +47,8 @@ class ElasticsearchDeclarativeMetaclass(DeclarativeMetaclass):
             'es_server': getattr(settings, "ES_SERVER", "127.0.0.1:9200"),
             'es_connection_class': Urllib3HttpConnection,
             'es_timeout': 30,
+            'create_if_missing': False,
+            'index_settings': {},
         }
         for k,v in override.iteritems():
             setattr(new_class._meta, k, v)
@@ -64,6 +66,13 @@ class ElasticsearchResource(Resource):
     """
     
     __metaclass__ = ElasticsearchDeclarativeMetaclass
+    
+    def __init__(self, api_name=None, *args, **kwargs):
+        super(ElasticsearchResource, self).__init__(api_name, *args, **kwargs)
+
+        # create the index if missing and create_if_missing
+        if self._meta.create_if_missing and not self.client.indices.exists(self._meta.index):
+            self.client.indices.create(self._meta.index, body=self._meta.index_settings)
 
     _es = None
     def es__get(self):
@@ -99,7 +108,6 @@ class ElasticsearchResource(Resource):
             url(r"^(?P<resource_name>%s)/(?P<%s>.*?)%s$" % (resource_name, 
                 self._meta.detail_uri_name, tr), self.wrap_view('dispatch_detail'), 
                 name="api_dispatch_detail"),
-            
         ]
 
     def build_schema(self):
@@ -147,6 +155,7 @@ class ElasticsearchResource(Resource):
             result = super(ElasticsearchResource, self).get_resource_uri(bundle_or_obj)
             return result
     
+    
         obj = (bundle_or_obj.obj if 
             isinstance(bundle_or_obj, Bundle) else bundle_or_obj)
 
@@ -186,23 +195,23 @@ class ElasticsearchResource(Resource):
         if len(query) is 0:
             # show all
             query.append({"match_all": {}})
-
-        return {
-            "query": {
-                "bool": {
-                    "must": query,
-                },
-            },
+        
+        result = {
             "from": long(request.GET.get("offset", 0)),
             "size": long(request.GET.get("limit", self._meta.limit)),
             "sort": sort or [],
         }
-        
-    
+        # extend result dict if body is present
+        if request.body:
+            result.update(json.loads(request.body))
+
+        return result
+
     def get_object_list(self, request):
+        kwargs = dict()
+        kwargs['body'] = self.build_query(request)
+
         try:
-            kwargs = dict()
-            kwargs['body'] = self.build_query(request)
             result = self.client.search(self._meta.index, self._meta.doc_type, **kwargs)
         except Exception, exc:
             response = http.HttpBadRequest(str(exc), content_type="text/plain")
@@ -242,9 +251,8 @@ class ElasticsearchResource(Resource):
         bundle.obj = dict(kwargs)
         bundle = self.full_hydrate(bundle)
         pk = kwargs.get('pk', bundle.obj.get('_id'))
-
-        result = self.client.update(self._meta.index, self._meta.doc_type, bundle.obj, 
-                                    id=pk, refresh=True)
+        result = self.client.update(self._meta.index, self._meta.doc_type, 
+                                    bundle.obj, id=pk, refresh=True)
         result.update(bundle.obj)
         return result
     

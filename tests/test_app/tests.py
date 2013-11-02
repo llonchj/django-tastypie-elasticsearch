@@ -23,17 +23,12 @@ import resources
 @utils.override_settings(DEBUG=True)
 class TastypieElasticsearchTest(ResourceTestCase):
     api_name = 'v1'
-    
-    def setUp(self):
-        super(TastypieElasticsearchTest, self).setUp()
 
+    def tearDown(self):
+        #
+        # ensure index is removed after running tests
+        #
         self.resource_class = resources.TestResource
-        self.resource_class._meta.index = "test"
-        #self.resource_class._meta.cache = NoCache()
-        
-        #
-        # ensure index is up and created
-        #
         es_server = resources.TestResource._meta.es_server
         index = self.resource_class._meta.index
         
@@ -42,13 +37,7 @@ class TastypieElasticsearchTest(ResourceTestCase):
         self.es = elasticsearch.Elasticsearch(hosts, 
             timeout=30)
 
-        if self.es.indices.exists(index):
-            self.es.indices.delete(index)
-        self.es.indices.create(index)
-
-    def tearDown(self):
-        index = self.resource_class._meta.index
-        #self.es.indices.delete(index)
+        self.es.indices.delete(index)
 
     def resourceListURI(self, resource_name):
         return urlresolvers.reverse('api_dispatch_list', kwargs={'api_name': self.api_name, 'resource_name': resource_name})
