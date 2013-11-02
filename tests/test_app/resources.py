@@ -17,6 +17,19 @@ class TestResource(resources.ElasticsearchResource):
         
         authentication = Authentication()
         authorization = DjangoAuthorization()
+        
+        create_if_missing = True
+        index_settings = {
+            'settings': {
+                'number_of_shards': 2,
+                'number_of_replicas': 0,
+            },
+            'mappings':{
+                'test': {
+                    'first_name':{'type':'string', 'store':'yes'},
+                }
+            },
+        }
 
     def determine_format(self, request):
         return "application/json"
